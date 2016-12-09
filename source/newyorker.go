@@ -21,6 +21,11 @@ import (
 // The New Yorker (http://www.newyorker.com).
 type NewYorker struct{}
 
+// Help returns the usage information for this Source.
+func (_ NewYorker) Help() string {
+	return "Fetch articles from NewYorker.\nNo flags at this time."
+}
+
 // Authors lists the contributors from the page:
 // http://www.newyorker.com/contributors/.
 func (_ NewYorker) Authors(stop <-chan struct{}) (<-chan Author, <-chan error) {

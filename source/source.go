@@ -5,6 +5,11 @@ import "time"
 // A Source represents a collection of textual articles
 // written by various authors.
 type Source interface {
+	// Help returns a string containing the usage for this
+	// source, including environment variable names that may
+	// be used to supply parameters for it.
+	Help() string
+
 	// Authors produces a stream of authors, which can be
 	// stopped early by closing the stop channel.
 	Authors(stop <-chan struct{}) (<-chan Author, <-chan error)
@@ -35,3 +40,5 @@ type Article interface {
 	// even though there may be one (e.g. due to HTTP error).
 	Date() (time.Time, error)
 }
+
+var Sources = map[string]Source{"NewYorker": NewYorker{}}
