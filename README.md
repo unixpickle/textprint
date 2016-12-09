@@ -12,7 +12,6 @@ TODO:
  * Fetch from online magazines/news sources
    * [The Guardian](https://www.theguardian.com/us)
    * [The New York Times](http://www.nytimes.com/)
-   * [The New Yorker](http://www.newyorker.com/contributors/)
  * Fetch from online forums
    * [Quora](https://www.quora.com)
 
