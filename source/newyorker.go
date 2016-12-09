@@ -212,6 +212,11 @@ func (n *newYorkerArticle) Body() (body string, err error) {
 			paraText = append(paraText, strings.TrimSpace(scrape.Text(p)))
 		}
 		body = strings.Join(paraText, "\n\n")
+
+		if strings.HasPrefix(body, "This article is available to subscribers only") {
+			return errors.New("article is subscriber-only")
+		}
+
 		return nil
 	})
 	return
