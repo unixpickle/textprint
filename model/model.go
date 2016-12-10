@@ -5,8 +5,11 @@ import (
 	"github.com/unixpickle/autofunc/seqfunc"
 	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/serializer"
+	"github.com/unixpickle/weakai/neuralnet"
 	"github.com/unixpickle/weakai/rnn"
 )
+
+const fingerprintSize = 50
 
 func init() {
 	var m Model
@@ -25,6 +28,25 @@ func DeserializeModel(d []byte) (*Model, error) {
 		return nil, err
 	}
 	return &res, nil
+}
+
+// NewModel creates a fresh, untrained model.
+func NewModel() *Model {
+	outNet := neuralnet.Network{
+		&neuralnet.DenseLayer{
+			InputCount:  0x180,
+			OutputCount: fingerprintSize,
+		},
+		&neuralnet.HyperbolicTangent{},
+	}
+	outNet.Randomize()
+	return &Model{
+		Block: rnn.StackedBlock{
+			rnn.NewLSTM(0x100, 0x180),
+			rnn.NewLSTM(0x180, 0x180),
+			rnn.NewNetworkBlock(outNet, 0),
+		},
+	}
 }
 
 // Fingerprints generates a concatenated result with the
@@ -50,7 +72,7 @@ func (m *Model) Fingerprints(s []string) autofunc.Result {
 // Cost generates a cost value for a batch of training.
 // Every unit in a batch includes a comparison and a
 // contrast, so a batch size of n means 4n sequences.
-func (m *Model) Cost(batch int, s Samples) autofunc.Result {
+func (m *Model) Cost(batch int, s *Samples) autofunc.Result {
 	ins := make([]string, 0, 4*batch)
 	for i := 0; i < batch; i++ {
 		s1, s2 := s.Compare()
@@ -73,7 +95,7 @@ func (m *Model) Cost(batch int, s Samples) autofunc.Result {
 			}
 		}
 		for i := 0; i < batch; i++ {
-			dist := distance(split[i*2+batch*2], split[i*2+batch*2])
+			dist := distance(split[i*2+batch*2], split[i*2+batch*2+1])
 			cost = autofunc.Add(cost, autofunc.Scale(dist, -1))
 		}
 		return autofunc.Scale(cost, 1/float64(2*batch))

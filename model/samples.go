@@ -2,8 +2,10 @@ package model
 
 import (
 	"crypto/md5"
+	"io/ioutil"
 	"math"
 	"math/rand"
+	"path/filepath"
 	"sort"
 )
 
@@ -13,8 +15,52 @@ type Samples struct {
 	AuthorNames []string
 }
 
+// ReadSamples reads a set of samples from a directory,
+// where each sub-directory corresponds to an author and
+// each .txt file inside said directory corresponds to an
+// article.
+//
+// Any article longer than maxLen is truncated.
+func ReadSamples(dir string, maxLen int) (*Samples, error) {
+	listing, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	res := &Samples{}
+	for _, item := range listing {
+		if !item.IsDir() {
+			continue
+		}
+		dirPath := filepath.Join(dir, item.Name())
+		sub, err := ioutil.ReadDir(dirPath)
+		if err != nil {
+			return nil, err
+		}
+		var arts []string
+		for _, artItem := range sub {
+			if filepath.Ext(artItem.Name()) == ".txt" {
+				contents, err := ioutil.ReadFile(filepath.Join(dirPath, artItem.Name()))
+				if err != nil {
+					return nil, err
+				}
+				if len(contents) > maxLen {
+					contents = contents[:maxLen]
+				}
+				if len(contents) > 0 {
+					arts = append(arts, string(contents))
+				}
+			}
+		}
+		if len(arts) > 0 {
+			res.AuthorNames = append(res.AuthorNames, item.Name())
+			res.Articles = append(res.Articles, arts)
+		}
+	}
+	return res, nil
+}
+
 // Compare selects two samples by the same author.
-func (s Samples) Compare() (string, string) {
+func (s *Samples) Compare() (string, string) {
 	var comparable [][]string
 	for _, x := range s.Articles {
 		if len(x) > 1 {
@@ -30,7 +76,7 @@ func (s Samples) Compare() (string, string) {
 }
 
 // Contrast selects two samples by two separate authors.
-func (s Samples) Contrast() (string, string) {
+func (s *Samples) Contrast() (string, string) {
 	if len(s.Articles) < 2 {
 		panic("need at least two authors to contrast")
 	}
@@ -42,15 +88,17 @@ func (s Samples) Contrast() (string, string) {
 
 // Split splits the samples up into a validation and
 // training set in a deterministic way.
-func (s Samples) Split(leftRatio float64) (left Samples, right Samples) {
+//
+// The original Samples s will be modified in the process.
+func (s *Samples) Split(leftRatio float64) (left *Samples, right *Samples) {
 	sorter := hashSorter{s: s}
 	sort.Sort(&sorter)
 	leftCount := int(math.Ceil(float64(len(s.Articles)) * leftRatio))
-	left = Samples{
+	left = &Samples{
 		Articles:    s.Articles[:leftCount],
 		AuthorNames: s.AuthorNames[:leftCount],
 	}
-	right = Samples{
+	right = &Samples{
 		Articles:    s.Articles[leftCount:],
 		AuthorNames: s.AuthorNames[leftCount:],
 	}
@@ -67,7 +115,7 @@ func sampleSeparate(n int) (int, int) {
 }
 
 type hashSorter struct {
-	s Samples
+	s *Samples
 }
 
 func (h *hashSorter) Len() int {
