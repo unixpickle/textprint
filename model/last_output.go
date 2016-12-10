@@ -1,4 +1,4 @@
-package textprint
+package model
 
 import (
 	"github.com/unixpickle/autofunc"
