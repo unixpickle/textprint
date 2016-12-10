@@ -105,6 +105,24 @@ func (s *Samples) Split(leftRatio float64) (left *Samples, right *Samples) {
 	return
 }
 
+// Batch generates a set of strings to be used with
+// (*Model).Cost().
+//
+// Every unit in a batch includes a comparison and a
+// contrast, so a batch size of n means 4n strings.
+func (s *Samples) Batch(batch int) []string {
+	ins := make([]string, 0, 4*batch)
+	for i := 0; i < batch; i++ {
+		s1, s2 := s.Compare()
+		ins = append(ins, s1, s2)
+	}
+	for i := 0; i < batch; i++ {
+		s1, s2 := s.Contrast()
+		ins = append(ins, s1, s2)
+	}
+	return ins
+}
+
 func sampleSeparate(n int) (int, int) {
 	idx1 := rand.Intn(n)
 	idx2 := rand.Intn(n)

@@ -76,22 +76,28 @@ func main() {
 
 	idx := 0
 	trans := sgd.Adam{}
+	lastBatch := []string(nil)
 	for {
 		select {
 		case <-killed:
 			return
 		default:
 		}
-		cost := m.Cost(batchSize, training)
+		batch := training.Batch(batchSize)
+		cost := m.Cost(batch)
 		if idx%logInterval == 0 {
-			valid := m.Cost(batchSize, validation).Output()[0]
-			log.Printf("iter %d:\tvalidation=%f\ttraining=%f", idx, valid,
-				cost.Output()[0])
+			valid := m.Cost(validation.Batch(batchSize)).Output()[0]
+			last := 0.0
+			if lastBatch != nil {
+				last = m.Cost(lastBatch).Output()[0]
+			}
+			log.Printf("iter %d:\tvalidation=%f\ttraining=%f\tlast=%f", idx, valid,
+				cost.Output()[0], last)
+			lastBatch = batch
 		}
 		grad := autofunc.NewGradient(m.Block.(sgd.Learner).Parameters())
 		cost.PropagateGradient([]float64{1}, grad)
 		grad = trans.Transform(grad)
-
 		grad.AddToVars(-stepSize)
 		idx++
 	}

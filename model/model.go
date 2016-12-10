@@ -69,19 +69,10 @@ func (m *Model) Fingerprints(s []string) autofunc.Result {
 	return lastOutputs(out)
 }
 
-// Cost generates a cost value for a batch of training.
-// Every unit in a batch includes a comparison and a
-// contrast, so a batch size of n means 4n sequences.
-func (m *Model) Cost(batch int, s *Samples) autofunc.Result {
-	ins := make([]string, 0, 4*batch)
-	for i := 0; i < batch; i++ {
-		s1, s2 := s.Compare()
-		ins = append(ins, s1, s2)
-	}
-	for i := 0; i < batch; i++ {
-		s1, s2 := s.Contrast()
-		ins = append(ins, s1, s2)
-	}
+// Cost generates a cost value for a batch.
+// The batch should come from (*Samples).Batch().
+func (m *Model) Cost(ins []string) autofunc.Result {
+	batch := len(ins) / 4
 	prints := m.Fingerprints(ins)
 	return autofunc.Pool(prints, func(prints autofunc.Result) autofunc.Result {
 		split := autofunc.Split(batch*4, prints)
