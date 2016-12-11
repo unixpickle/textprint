@@ -106,6 +106,6 @@ func (m *Model) Serialize() ([]byte, error) {
 
 func distance(v1, v2 autofunc.Result) autofunc.Result {
 	sub := autofunc.Add(v1, autofunc.Scale(v2, -1))
-	mag2 := autofunc.SquaredNorm{}.Apply(sub)
-	return autofunc.Pow(mag2, 0.5)
+	desired := make(linalg.Vector, len(sub.Output()))
+	return neuralnet.AbsCost{}.Cost(desired, sub)
 }
