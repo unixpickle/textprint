@@ -37,7 +37,6 @@ func NewModel() *Model {
 			InputCount:  0x180,
 			OutputCount: fingerprintSize,
 		},
-		&neuralnet.HyperbolicTangent{},
 	}
 	outNet.Randomize()
 	return &Model{
@@ -105,7 +104,11 @@ func (m *Model) Serialize() ([]byte, error) {
 }
 
 func distance(v1, v2 autofunc.Result) autofunc.Result {
-	sub := autofunc.Add(v1, autofunc.Scale(v2, -1))
-	mag2 := autofunc.SquaredNorm{}.Apply(sub)
-	return autofunc.Pow(mag2, 0.5)
+	norm := autofunc.SquaredNorm{}
+	mag1 := autofunc.Pow(norm.Apply(v1), 0.5)
+	mag2 := autofunc.Pow(norm.Apply(v2), 0.5)
+	dot := autofunc.SumAll(autofunc.Mul(v1, v2))
+	dot = autofunc.ScaleFirst(dot, autofunc.Inverse(mag1))
+	dot = autofunc.ScaleFirst(dot, autofunc.Inverse(mag2))
+	return autofunc.Scale(dot, -1)
 }
