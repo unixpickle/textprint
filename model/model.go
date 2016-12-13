@@ -18,13 +18,15 @@ func init() {
 
 // A Model produces fingerprints or costs for strings.
 type Model struct {
-	Block rnn.Block
+	Block    rnn.Block
+	Comparer neuralnet.Network
 }
 
 // DeserializeModel deserializes a model.
 func DeserializeModel(d []byte) (*Model, error) {
 	var res Model
-	if err := serializer.DeserializeAny(d, &res.Block); err != nil {
+	err := serializer.DeserializeAny(d, &res.Block, &res.Comparer)
+	if err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -40,12 +42,30 @@ func NewModel() *Model {
 		&neuralnet.HyperbolicTangent{},
 	}
 	outNet.Randomize()
+	comp := neuralnet.Network{
+		&neuralnet.DenseLayer{
+			InputCount:  fingerprintSize * 2,
+			OutputCount: 200,
+		},
+		&neuralnet.HyperbolicTangent{},
+		&neuralnet.DenseLayer{
+			InputCount:  200,
+			OutputCount: 150,
+		},
+		&neuralnet.HyperbolicTangent{},
+		&neuralnet.DenseLayer{
+			InputCount:  150,
+			OutputCount: 1,
+		},
+	}
+	comp.Randomize()
 	return &Model{
 		Block: rnn.StackedBlock{
 			rnn.NewLSTM(0x100, 0x180),
 			rnn.NewLSTM(0x180, 0x180),
 			rnn.NewNetworkBlock(outNet, 0),
 		},
+		Comparer: comp,
 	}
 }
 
@@ -75,18 +95,19 @@ func (m *Model) Cost(ins []string) autofunc.Result {
 	batch := len(ins) / 4
 	prints := m.Fingerprints(ins)
 	return autofunc.Pool(prints, func(prints autofunc.Result) autofunc.Result {
-		split := autofunc.Split(batch*4, prints)
+		comparisons := m.Comparer.BatchLearner().Batch(prints, batch*2)
+		distances := autofunc.Split(batch*2, comparisons)
 		var cost autofunc.Result
 		for i := 0; i < batch; i++ {
-			dist := distance(split[i*2], split[i*2+1])
+			dist := distances[i]
 			if cost == nil {
 				cost = dist
 			} else {
 				cost = autofunc.Add(cost, dist)
 			}
 		}
-		for i := 0; i < batch; i++ {
-			dist := distance(split[i*2+batch*2], split[i*2+batch*2+1])
+		for i := batch; i < 2*batch; i++ {
+			dist := distances[i]
 			cost = autofunc.Add(cost, autofunc.Scale(dist, -1))
 		}
 		return autofunc.Scale(cost, 1/float64(2*batch))
@@ -101,11 +122,5 @@ func (m *Model) SerializerType() string {
 
 // Serialize serializes the model.
 func (m *Model) Serialize() ([]byte, error) {
-	return serializer.SerializeAny(m.Block)
-}
-
-func distance(v1, v2 autofunc.Result) autofunc.Result {
-	sub := autofunc.Add(v1, autofunc.Scale(v2, -1))
-	desired := make(linalg.Vector, len(sub.Output()))
-	return neuralnet.AbsCost{}.Cost(desired, sub)
+	return serializer.SerializeAny(m.Block, m.Comparer)
 }
