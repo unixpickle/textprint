@@ -6,12 +6,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/signal"
 
-	"github.com/unixpickle/autofunc"
 	"github.com/unixpickle/sgd"
 	"github.com/unixpickle/textprint/model"
 )
+
+const SampleCount = 10000
 
 func main() {
 	var batchSize int
@@ -27,7 +27,7 @@ func main() {
 	flag.IntVar(&batchSize, "batch", 1, "batch size")
 	flag.IntVar(&logInterval, "logint", 4, "log interval")
 	flag.IntVar(&maxLen, "maxlen", 0x400, "max article length")
-	flag.Float64Var(&stepSize, "step", 0.001, "step size")
+	flag.Float64Var(&stepSize, "step", 0.0001, "step size")
 	flag.Float64Var(&validationFrac, "validation", 0.1, "validation fraction")
 
 	flag.Parse()
@@ -45,7 +45,10 @@ func main() {
 	if err != nil {
 		die("Failed to read samples:", err)
 	}
-	validation, training := samples.Split(validationFrac)
+	validationData, trainingData := samples.Split(validationFrac)
+
+	validation := validationData.SampleSet(SampleCount)
+	training := trainingData.SampleSet(SampleCount)
 
 	defer func() {
 		encoded, err := m.Serialize()
@@ -58,48 +61,33 @@ func main() {
 	}()
 
 	log.Println("Training...")
-
-	killed := make(chan struct{})
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-
-	go func() {
-		_, ok := <-c
-		if !ok {
-			return
-		}
-		signal.Stop(c)
-		close(c)
-		close(killed)
-		fmt.Println("\nCaught interrupt. Ctrl+C again to terminate.")
-	}()
-
-	idx := 0
-	trans := sgd.Adam{}
-	lastBatch := []string(nil)
-	for {
-		select {
-		case <-killed:
-			return
-		default:
-		}
-		batch := training.Batch(batchSize)
-		cost := m.Cost(batch)
+	g := &sgd.RMSProp{Gradienter: m, Resiliency: 0.9}
+	var lastBatch sgd.SampleSet
+	var idx int
+	sgd.SGDMini(g, training, stepSize, batchSize, func(batch sgd.SampleSet) bool {
 		if idx%logInterval == 0 {
-			valid := m.Cost(validation.Batch(batchSize)).Output()[0]
-			last := 0.0
+			var last float64
 			if lastBatch != nil {
 				last = m.Cost(lastBatch).Output()[0]
 			}
-			log.Printf("iter %d:\tvalidation=%f\ttraining=%f\tlast=%f", idx, valid,
-				cost.Output()[0], last)
-			lastBatch = batch
+			lastBatch = batch.Copy()
+			cost := m.Cost(batch).Output()[0]
+			sgd.ShuffleSampleSet(validation)
+			valCost := m.Cost(validation.Subset(0, batchSize)).Output()[0]
+			log.Printf("iter %d: val=%f cost=%f last=%f", idx, valCost, cost, last)
 		}
-		grad := autofunc.NewGradient(m.Block.(sgd.Learner).Parameters())
-		cost.PropagateGradient([]float64{1}, grad)
-		grad = trans.Transform(grad)
-		grad.AddToVars(-stepSize)
 		idx++
+		return true
+	})
+
+	data, err := m.Serialize()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Serialization failed:", err)
+		os.Exit(1)
+	}
+	if err := ioutil.WriteFile(netFile, data, 0755); err != nil {
+		fmt.Fprintln(os.Stderr, "Failed to save network:", err)
+		os.Exit(1)
 	}
 }
 

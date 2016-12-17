@@ -5,6 +5,7 @@ import (
 	"github.com/unixpickle/autofunc/seqfunc"
 	"github.com/unixpickle/num-analysis/linalg"
 	"github.com/unixpickle/serializer"
+	"github.com/unixpickle/sgd"
 	"github.com/unixpickle/weakai/neuralnet"
 	"github.com/unixpickle/weakai/rnn"
 )
@@ -71,14 +72,18 @@ func NewModel() *Model {
 
 // Fingerprints generates a concatenated result with the
 // fingerprint of each string in ordered.
-func (m *Model) Fingerprints(s []string) autofunc.Result {
-	inSeqs := make([][]linalg.Vector, len(s))
-	for i, x := range s {
-		b := []byte(x)
-		inSeqs[i] = make([]linalg.Vector, len(b))
-		for j, ch := range b {
-			inSeqs[i][j] = make(linalg.Vector, 0x100)
-			inSeqs[i][j][int(ch)] = 1
+func (m *Model) Fingerprints(s sgd.SampleSet) autofunc.Result {
+	inSeqs := make([][]linalg.Vector, 0, s.Len()*2)
+	for i := 0; i < s.Len(); i++ {
+		sample := s.GetSample(i).(*Sample)
+		for _, str := range sample.Articles[:] {
+			b := []byte(*str)
+			seq := make([]linalg.Vector, len(b))
+			for j, ch := range b {
+				seq[j] = make(linalg.Vector, 0x100)
+				seq[j][int(ch)] = 1
+			}
+			inSeqs = append(inSeqs, seq)
 		}
 	}
 
@@ -86,32 +91,39 @@ func (m *Model) Fingerprints(s []string) autofunc.Result {
 	f := rnn.BlockSeqFunc{B: m.Block}
 	out := f.ApplySeqs(in)
 
-	return lastOutputs(out)
+	return seqfunc.ConcatLast(out)
 }
 
 // Cost generates a cost value for a batch.
-// The batch should come from (*Samples).Batch().
-func (m *Model) Cost(ins []string) autofunc.Result {
-	batch := len(ins) / 4
-	prints := m.Fingerprints(ins)
+func (m *Model) Cost(s sgd.SampleSet) autofunc.Result {
+	prints := m.Fingerprints(s)
 	return autofunc.Pool(prints, func(prints autofunc.Result) autofunc.Result {
-		comparisons := m.Comparer.BatchLearner().Batch(prints, batch*2)
-		distances := autofunc.Split(batch*2, comparisons)
-		var cost autofunc.Result
-		for i := 0; i < batch; i++ {
-			dist := distances[i]
-			if cost == nil {
-				cost = dist
-			} else {
-				cost = autofunc.Add(cost, dist)
+		comparisons := m.Comparer.BatchLearner().Batch(prints, s.Len())
+		desired := make(linalg.Vector, s.Len())
+		for i := range desired {
+			if s.GetSample(i).(*Sample).Same {
+				desired[i] = 1
 			}
 		}
-		for i := batch; i < 2*batch; i++ {
-			dist := distances[i]
-			cost = autofunc.Add(cost, autofunc.Scale(dist, -1))
-		}
-		return autofunc.Scale(cost, 1/float64(2*batch))
+		cost := neuralnet.SigmoidCECost{}.Cost(desired, comparisons)
+		return autofunc.Scale(cost, 1/float64(s.Len()))
 	})
+}
+
+// Gradient computes the cost gradient for a batch.
+func (m *Model) Gradient(s sgd.SampleSet) autofunc.Gradient {
+	grad := autofunc.NewGradient(m.Parameters())
+	m.Cost(s).PropagateGradient([]float64{1}, grad)
+	return grad
+}
+
+// Parameters returns the parameters of the block and the
+// decision network.
+func (m *Model) Parameters() []*autofunc.Variable {
+	var res []*autofunc.Variable
+	res = append(res, m.Block.(sgd.Learner).Parameters()...)
+	res = append(res, m.Comparer.Parameters()...)
+	return res
 }
 
 // SerializerType returns the unique ID used to serialize
