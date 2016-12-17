@@ -79,16 +79,6 @@ func main() {
 		idx++
 		return true
 	})
-
-	data, err := m.Serialize()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Serialization failed:", err)
-		os.Exit(1)
-	}
-	if err := ioutil.WriteFile(netFile, data, 0755); err != nil {
-		fmt.Fprintln(os.Stderr, "Failed to save network:", err)
-		os.Exit(1)
-	}
 }
 
 func readModel(path string) *model.Model {
