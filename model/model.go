@@ -35,7 +35,7 @@ func DeserializeModel(d []byte) (*Model, error) {
 func NewModel(c anyvec.Creator) *Model {
 	return &Model{
 		Block: anyrnn.Stack{
-			anyrnn.NewLSTM(c, 0x100, 0x180),
+			anyrnn.NewLSTM(c, 0x100, 0x180).ScaleInWeights(c.MakeNumeric(0x10)),
 			anyrnn.NewLSTM(c, 0x180, fingerprintSize),
 		},
 		Comparer: anynet.Net{
