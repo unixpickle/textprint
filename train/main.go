@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"log"
+	"math/rand"
+	"time"
 
 	"github.com/unixpickle/anynet/anyff"
 	"github.com/unixpickle/anynet/anysgd"
@@ -15,6 +17,8 @@ import (
 )
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	var batchSize int
 	var stepSize float64
 	var validationFrac float64
