@@ -7,15 +7,7 @@ import (
 	"math/rand"
 	"path/filepath"
 	"sort"
-
-	"github.com/unixpickle/sgd"
 )
-
-// A Sample is a comparison of two articles.
-type Sample struct {
-	Articles [2]*string
-	Same     bool
-}
 
 // Samples stores a set of articles, collected by author.
 type Samples struct {
@@ -68,7 +60,7 @@ func ReadSamples(dir string, maxLen int) (*Samples, error) {
 }
 
 // Compare selects two samples by the same author.
-func (s *Samples) Compare() (*string, *string) {
+func (s *Samples) Compare() (string, string) {
 	var comparable [][]string
 	for _, x := range s.Articles {
 		if len(x) > 1 {
@@ -80,17 +72,17 @@ func (s *Samples) Compare() (*string, *string) {
 	}
 	samples := comparable[rand.Intn(len(comparable))]
 	idx1, idx2 := sampleSeparate(len(samples))
-	return &samples[idx1], &samples[idx2]
+	return samples[idx1], samples[idx2]
 }
 
 // Contrast selects two samples by two separate authors.
-func (s *Samples) Contrast() (*string, *string) {
+func (s *Samples) Contrast() (string, string) {
 	if len(s.Articles) < 2 {
 		panic("need at least two authors to contrast")
 	}
 	idx1, idx2 := sampleSeparate(len(s.Articles))
-	sample1 := &s.Articles[idx1][rand.Intn(len(s.Articles[idx1]))]
-	sample2 := &s.Articles[idx2][rand.Intn(len(s.Articles[idx2]))]
+	sample1 := s.Articles[idx1][rand.Intn(len(s.Articles[idx1]))]
+	sample2 := s.Articles[idx2][rand.Intn(len(s.Articles[idx2]))]
 	return sample1, sample2
 }
 
@@ -111,20 +103,6 @@ func (s *Samples) Split(leftRatio float64) (left *Samples, right *Samples) {
 		AuthorNames: s.AuthorNames[leftCount:],
 	}
 	return
-}
-
-// SampleSet generates an sgd.SampleSet full of *Sample
-// instances by sampling from the articles.
-func (s *Samples) SampleSet(count int) sgd.SampleSet {
-	var res sgd.SliceSampleSet
-	for i := 0; i < count; i++ {
-		c1, c2 := s.Compare()
-		comp := &Sample{Articles: [2]*string{c1, c2}, Same: true}
-		c1, c2 = s.Contrast()
-		cont := &Sample{Articles: [2]*string{c1, c2}, Same: false}
-		res = append(res, comp, cont)
-	}
-	return res
 }
 
 func sampleSeparate(n int) (int, int) {
