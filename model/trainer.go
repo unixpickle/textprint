@@ -49,7 +49,7 @@ func (t *Trainer) Fetch(s anysgd.SampleList) (anysgd.Batch, error) {
 		seqs = append(seqs, stringToSeq(c, a), stringToSeq(c, b))
 	}
 	return &Batch{
-		Seqs: anyseq.ConstSeqList(seqs),
+		Seqs: anyseq.ConstSeqList(c, seqs),
 		Outs: anydiff.NewConst(c.Concat(outputs...)),
 	}, nil
 }
